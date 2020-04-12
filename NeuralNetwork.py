@@ -6,31 +6,41 @@ def mse_loss(y_true, y_pred):
     # y_true and y_pred are numpy arrays of the same length.
     return ((y_true - y_pred) ** 2).mean()
 
-class OurNeuralNetwork:
 
-    def __init__(self, data, all_y_trues, neurons_in_HL = 0):
+class OurNeuralNetwork:
+    def __init__(self, data, all_y_trues, neurons_in_hl=[0]):
         # Data Members
         self.data = data
         self.all_y_trues = all_y_trues
         self.hidden_layers = []
 
-        # Hidden Layer 1
-        self.hl = HiddenLayer(neurons_in_HL[0])
+        # # Hidden Layer 1
+        # self.hl = HiddenLayer(neurons_in_hl[0])
 
-        for neuron in self.hl.neurons():
-            neuron.changeProps([np.random.normal() for i in range(len(self.data[0]))], np.random.normal())
+        # For each hidden layer save in the hidden_layer array
+        amount_of_weights = len(self.data[0])
+        for hl_count in range(len(neurons_in_hl)):
+            hl = HiddenLayer(neurons_in_hl[hl_count])
+            for neuron in hl.neurons():
+                neuron.changeProps([np.random.normal() for i in range(amount_of_weights)], np.random.normal())
+
+            amount_of_weights = neurons_in_hl[hl_count]
+            self.hidden_layers.append(hl)
 
         # Output Neuron
-        self.o1 = Neuron([np.random.normal() for i in range(len(self.data[0]))], np.random.normal())
+        self.o1 = Neuron([np.random.normal() for i in range(amount_of_weights)], np.random.normal())
 
     def feedforward(self, x):
-        return self.o1.feedforward([neuron.feedforward(x) for neuron in self.hl.neurons()])
+        input_data = x
+        for hl in self.hidden_layers:
+            input_data = hl.feedforward(input_data)
+
+        return self.o1.feedforward(input_data)
 
     def train(self):
 
-        learn_rate = 0.1
-        epochs = 1000  # number of times to loop through the entire dataset
-
+        learn_rate = 0.01
+        epochs = 10000  # number of times to loop through the entire dataset
         for epoch in range(epochs):
             for x, y_true in zip(self.data, self.all_y_trues):
 
@@ -44,26 +54,25 @@ class OurNeuralNetwork:
                 # Neuron o1
                 derived_sum_o1 = self.o1.derivedTotal()
 
-                d_ypred_d_w5 = self.hl.neuronByIndex(0).feedforward(x) * derived_sum_o1
-                d_ypred_d_w6 = self.hl.neuronByIndex(1).feedforward(x) * derived_sum_o1
-                d_ypred_d_b3 = derived_sum_o1
+                for neuron_count, neuron in enumerate(self.hidden_layers[-1].neurons()):
+                    self.o1.changeWeightInIndex(neuron_count, self.o1.weightInIndex(
+                        neuron_count) - learn_rate * d_L_d_ypred * neuron.getFeedforwardResualt() * derived_sum_o1)
 
-                for neuron in self.hl.neurons():
-                    derived_sum = neuron.derivedTotal()
-                    d_ypred_d_hl = self.o1.weightInIndex(0) * derived_sum_o1
+                self.o1.changeBias(self.o1.bias() - learn_rate * d_L_d_ypred * derived_sum_o1)
 
-                    d_hl_d_w1 = x[0] * derived_sum
-                    d_hl_d_w2 = x[1] * derived_sum
-                    d_hl_d_b  = derived_sum
+                input_arr = x
+                for hl in self.hidden_layers:
+                    for neuron in hl.neurons():
+                        derived_sum = neuron.derivedTotal()
+                        d_ypred_d_hl = self.o1.weightInIndex(0) * derived_sum_o1
 
-                    neuron.changeWeightInIndex(0, neuron.weightInIndex(0) - learn_rate * d_L_d_ypred * d_ypred_d_hl * d_hl_d_w1)
-                    neuron.changeWeightInIndex(1, neuron.weightInIndex(1) - learn_rate * d_L_d_ypred * d_ypred_d_hl * d_hl_d_w2)
-                    neuron.changeBias(neuron.bias() - learn_rate * d_L_d_ypred * d_ypred_d_hl * d_hl_d_b)
+                        for weight_count in range(len(neuron.weights())):
+                            neuron.changeWeightInIndex(weight_count, neuron.weightInIndex(
+                                weight_count) - learn_rate * d_L_d_ypred * d_ypred_d_hl * input_arr[
+                                                           weight_count] * derived_sum)
+                        neuron.changeBias(neuron.bias() - learn_rate * d_L_d_ypred * d_ypred_d_hl * derived_sum)
 
-                # Neuron o1
-                self.o1.changeWeightInIndex(0, self.o1.weightInIndex(0) - learn_rate * d_L_d_ypred * d_ypred_d_w5)
-                self.o1.changeWeightInIndex(1, self.o1.weightInIndex(1) - learn_rate * d_L_d_ypred * d_ypred_d_w6)
-                self.o1.changeBias(self.o1.bias() - learn_rate * d_L_d_ypred * d_ypred_d_b3)
+                    input_arr = hl.getFeedforwardResualt()
 
             # --- Calculate total loss at the end of each epoch
             if epoch % 10 == 0:
